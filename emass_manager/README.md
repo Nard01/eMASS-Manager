@@ -1,54 +1,69 @@
 # eMASS Manager
 
-## Startup Flow (Connect & Authenticate First)
-The app now starts on a dedicated **Connect & Authenticate** page instead of going directly to Dashboard.
-Main pages are locked until either:
-- a successful connection/authentication test, or
-- intentional **Mock Mode** entry.
+## Windows-Only Native CAC Authentication
+`eMASS Manager` is designed for **Windows CAC/smart-card authentication** using the **Windows Certificate Store** and Windows TLS stack. The app launches to the **Connect & Authenticate** page and keeps Dashboard/pages locked until:
+1. successful CAC connection test, or
+2. intentional Mock Mode entry.
 
-Run with:
+Run:
 ```bash
 python main.py
 ```
 
-## Authentication Modes
-1. **Mock Mode**
-   - Uses mock API responses.
-   - No URL, certificate, key, or API key required.
-   - Main app shows a visible Mock Mode badge.
+## Authentication Modes (UI)
+1. **Windows Certificate Store / CAC** (default, primary)
+2. **Mock Mode** (development/testing with badge)
 
-2. **PEM Certificate Files**
-   - Enter eMASS host URL and API key.
-   - Optional user UID header.
-   - Select client certificate (`.pem/.crt/.cer`) and private key (`.pem/.key`).
-   - Supports SSL verify toggle and optional CA bundle path.
+PEM certificate/key file mode is removed from normal workflow and considered deprecated.
 
-3. **Windows Certificate Store / CAC (Placeholder)**
-   - UI and abstraction layer are present.
-   - Returns a clear **Not implemented yet** style message currently.
-   - Future work: Windows CAPI/CNG + certificate store/smart card integration.
+## Connect & Authenticate Screen
+Includes:
+- eMASS Host URL
+- API Key (masked)
+- User UID
+- Authentication Mode
+- Select CAC Certificate
+- Refresh Certificates
+- View Certificate Details
+- Test Connection
+- Continue in Mock Mode
+- Exit
+- Connection status panel + CAC help text
 
-## Security Cautions
-- API key and private key password are **required each session** by default.
-- Secrets are masked in UI.
-- Profiles store non-secret settings only.
-- No CAC PIN storage.
-- No private key/certificate secret logging.
-- Write APIs (POST/PUT/PATCH/DELETE) remain disabled.
+## Certificate Handling
+- Enumerates certificates from Windows Current User `MY` store.
+- Uses metadata only (subject/issuer/thumbprint/expiry/EKU/private-key flag).
+- No certificate export.
+- No private-key export.
+- Private key remains on CAC/smart card.
+- Windows handles PIN prompts (app never asks/stores PIN).
 
-## Profile Storage
-Profiles persist non-secret values such as:
-- profile name
-- host URL
-- auth mode
-- user UID
-- cert/key paths
-- SSL verify and CA bundle
-- export directory
-- mock mode flag
+## Session and Profiles
+Profiles may store non-secret fields only (host/auth mode/UID/thumbprint/SSL verify/export/mock flag).
 
-## Mock Mode Use
-- Use **Continue in Mock Mode** from the connect page to immediately unlock Dashboard and pages with mock data.
+Profiles do **not** store:
+- CAC PIN
+- private key material
+- API key
 
-## Future CAC Work
-Planned enhancements include secure Windows certificate store selection and smart card/CAC integration via supported OS APIs/libraries.
+API key is required each session unless secure credential storage is added in the future (for example, Windows Credential Manager abstraction).
+
+## Security and Audit
+Audit events include startup/connect/open/enumeration/select/test success/failure/mock entered/session start/end.
+Audit excludes API keys, PINs, private key material, certificate bodies, and sensitive headers.
+
+## Transport Architecture
+- `HttpTransport` abstraction decouples client wrapper from specific HTTP stack.
+- `MockTransport` for development/testing.
+- `WindowsCacAuthProvider` for native Windows CAC flow (Windows store + TLS stack).
+- Write operations remain disabled.
+
+## Dependencies
+- `pythonnet` used for Windows certificate-store interop path.
+
+## Troubleshooting
+- No CAC detected / no certificates found: insert CAC and refresh certificates.
+- Expired/missing private key/not client-auth capable: choose a different certificate.
+- 401: API key invalid/missing.
+- 403: untrusted/unauthorized certificate.
+- Non-Windows host: Windows certificate store path unavailable.
