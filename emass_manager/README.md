@@ -67,3 +67,9 @@ Audit excludes API keys, PINs, private key material, certificate bodies, and sen
 - 401: API key invalid/missing.
 - 403: untrusted/unauthorized certificate.
 - Non-Windows host: Windows certificate store path unavailable.
+
+## Phase 3 (Read-only real eMASS + guarded staged submit)
+- Real API reads now flow through GUI -> service -> EmassClientWrapper -> HttpTransport -> WindowsCacTransport -> Windows Certificate Store/Schannel (via pythonnet/.NET HttpClient).
+- Native certificate thumbprint selection is required; API key is sent as `api-key` header; `user-uid` is sent only when configured.
+- Writes remain disabled by default. Enable guarded framework only with `EMASS_ENABLE_REAL_SUBMISSIONS=true` in developer environment.
+- No CAC PIN storage/export; no private key export; no PEM-primary path.
