@@ -1,29 +1,41 @@
-# eMASS Manager
+# eMASS Manager (Phase 2)
 
-## Purpose
-eMASS Manager is a read-only, audit-friendly PyQt6 desktop application for common RMF/eMASS workflows using a layered architecture. Version 1 defaults to mock mode and intentionally disables write operations.
+Phase 2 introduces a **safe automation foundation** while keeping all real write actions disabled.
 
-## Setup
+## Safety Model
+- Mock mode remains default.
+- Real eMASS POST/PUT/PATCH/DELETE actions are disabled until Phase 3.
+- Submit buttons for staged changes remain disabled in UI.
+- Future changes must be staged, reviewed, and validated first.
+
+## What's New in Phase 2
+- Shared reusable PyQt widgets for table UX consistency.
+- Local cache service under `data/cache/` by profile/system.
+- Staging engine with diff + validation + local persistence.
+- New **Staged Changes** page for review/export/clear operations.
+- Expanded audit logging with action metadata and failures.
+- Improved Excel exports with formatting and metadata headers.
+- Package readiness advisory summaries on reports.
+
+## Staged Changes
+Staged changes are local-only records that capture:
+- entity/action metadata
+- original vs proposed values
+- field-level diffs
+- validation messages/status
+
+No staged change is submitted to eMASS in Phase 2.
+
+## Cache Model
+Cache entries are JSON files in `data/cache/` grouped by profile and system. Sensitive secrets are not cached.
+
+## Audit Logs
+Audit records are written to `data/audit/audit.jsonl` and include timestamp, action, page/source, profile, system, entity identifiers, success/failure, summaries, and errors.
+
+## Phase 3 Preview
+Phase 3 will add controlled production write APIs with gated approvals and submission workflows.
+
+## Run
 ```bash
-python -m venv .venv
-.venv\\Scripts\\activate
-pip install -r requirements.txt
 python main.py
 ```
-
-## Mock Mode
-- Enabled by default through the default local profile.
-- Supports Systems, Controls, POA&Ms, Artifacts, Hardware, Software, Test Results, Workflows, Reports, and Audit Log UI flows.
-
-## Safety and Security Notes
-- Read-only mode by default.
-- No active write endpoints are implemented in v1.
-- Secrets are masked in UI table views and never written to audit logs.
-- Profile and cache storage is local JSON; audit storage is JSONL.
-
-## Future API Integration
-- `clients/emass_client_wrapper.py` contains TODO markers where real eMASS API calls can be integrated (generated client or `requests`).
-- Future write actions must use staged-review-submit workflow with diffing and receipt export.
-
-## Packaging Notes
-- Structure is compatible with future PyInstaller packaging (`main.py` entrypoint and local data directories).
