@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+data/profiles/
+data/cache/
+data/audit/
+data/exports/
+*.pem
+*.key
+*.p12
+*.pfx
+.env
