@@ -2,10 +2,14 @@ from __future__ import annotations
 import importlib
 from pathlib import Path
 from datetime import datetime
-from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QListWidget, QLabel, QStackedWidget
+from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QListWidget, QLabel, QStackedWidget, QMessageBox
 from app.theme import APP_STYLESHEET
 from app.settings import AppSettings
+from app.session_state import SessionState
+from clients.auth_profile import AuthProfile
 from clients.emass_client_wrapper import EmassClientWrapper
+from pages.connect_auth_page import ConnectAuthPage
+from services.auth_service import AuthService, AuthMode
 from services.audit_service import AuditService
 from services.cache_service import CacheService
 from services.staging_service import StagingService
@@ -16,16 +20,67 @@ class MainWindow(QMainWindow):
         super().__init__(); self.setWindowTitle('eMASS Manager'); self.resize(1400,860)
         self.base=Path(__file__).resolve().parents[1]
         self.settings=AppSettings(self.base)
-        self.profiles=self.settings.load_profiles(); self.active_profile=self.profiles[0] if self.profiles else None; self.system_id='101'
-        self.client=EmassClientWrapper(self.active_profile); self.audit=AuditService(self.base/'data/audit'); self.cache=CacheService(self.base/'data/cache'); self.staging=StagingService(self.base/'data/staging/staged_changes.json'); self.readiness=ReadinessService()
-        self.audit.log('app_startup', profile=getattr(self.active_profile,'name',''))
+        self.profiles=self.settings.load_profiles(); self.active_profile=self.profiles[0] if self.profiles else AuthProfile(name="Default Mock Profile")
+        self.system_id='101'; self.session=SessionState(); self.client=EmassClientWrapper(self.active_profile)
+        self.audit=AuditService(self.base/'data/audit'); self.cache=CacheService(self.base/'data/cache'); self.staging=StagingService(self.base/'data/staging/staged_changes.json'); self.readiness=ReadinessService(); self.auth=AuthService(self.audit)
+        self.audit.log('app_startup', profile=getattr(self.active_profile,'name','')); self.audit.log('connect_auth_page_opened', profile=getattr(self.active_profile,'name',''))
+
         root=QWidget(); self.setCentralWidget(root); main=QVBoxLayout(root)
         self.status=QLabel(); main.addWidget(self.status)
         content=QHBoxLayout(); main.addLayout(content)
         self.nav=QListWidget(); self.nav.addItems(['Dashboard','Systems','Controls','POA&Ms','Artifacts','Hardware Baseline','Software Baseline','Test Results','Workflows','Staged Changes','Reports','Settings','Audit Log']); self.nav.setMaximumWidth(220); content.addWidget(self.nav)
         self.stack=QStackedWidget(); content.addWidget(self.stack)
-        self._build_pages(); self.nav.currentRowChanged.connect(self.stack.setCurrentIndex)
-        self.nav.setCurrentRow(0); self.refresh_status()
+        self.connect_page = ConnectAuthPage(self.profiles, self.handle_test_connection, self.handle_continue_mock, self.handle_save_profile, self.handle_delete_profile, self.handle_new_profile, lambda: self._nav_to_settings(), self.close)
+        self.stack.addWidget(self.connect_page)
+        self._build_pages(); self.nav.currentRowChanged.connect(lambda idx: self.stack.setCurrentIndex(idx+1))
+        self._set_auth_state(False)
+
+    def _set_auth_state(self, authenticated: bool):
+        self.nav.setVisible(authenticated)
+        self.stack.setCurrentIndex(1 if authenticated else 0)
+        self.refresh_status()
+
+    def _nav_to_settings(self):
+        if self.session.authenticated:
+            self.nav.setCurrentRow(11)
+
+    def handle_test_connection(self, page: ConnectAuthPage):
+        page.status.setText("Status: Testing connection")
+        mode = page.mode.currentText()
+        p = self.active_profile
+        p.host_url = page.host.text().strip(); p.auth_mode = mode; p.user_uid = page.user_uid.text().strip(); p.client_cert_path = page.cert_path.text().strip(); p.private_key_path = page.key_path.text().strip(); p.ssl_verify = page.ssl_verify.isChecked(); p.ca_bundle_path = page.ca_bundle.text().strip(); p.mock_mode = page.mock_mode.isChecked() or mode == AuthMode.MOCK.value
+        outcome = self.auth.test_connection(p, page.api_key.text(), page.key_password.text())
+        page.status.setText(f"Status: {outcome.status} - {outcome.message}")
+        if outcome.success:
+            self.session.mark_authenticated(p.name, p.mock_mode)
+            self.audit.log("authenticated_session_started", profile=p.name, summary=outcome.status)
+            self._set_auth_state(True)
+        else:
+            QMessageBox.warning(self, "Connection Failed", outcome.message)
+
+    def handle_continue_mock(self, page: ConnectAuthPage):
+        self.active_profile.mock_mode = True; self.active_profile.auth_mode = AuthMode.MOCK.value
+        self.session.mark_authenticated(self.active_profile.name, True)
+        self.audit.log("mock_mode_entered", profile=self.active_profile.name)
+        self.audit.log("authenticated_session_started", profile=self.active_profile.name, summary="Mock mode")
+        page.status.setText("Status: Mock mode active")
+        self._set_auth_state(True)
+
+    def handle_save_profile(self, page):
+        self.active_profile.name = page.profile_combo.currentText() or self.active_profile.name
+        self.profiles = [self.active_profile]
+        self.settings.save_profiles(self.profiles)
+        self.audit.log("profile_saved", profile=self.active_profile.name)
+
+    def handle_delete_profile(self, page):
+        self.profiles = [AuthProfile(name="Default Mock Profile")]
+        self.active_profile = self.profiles[0]
+        self.settings.save_profiles(self.profiles)
+
+    def handle_new_profile(self, page):
+        self.active_profile = AuthProfile(name="New Profile")
+        self.profiles = [self.active_profile]
+        page.profile_combo.clear(); page.profile_combo.addItem(self.active_profile.name)
 
     def _resolve_page(self, module_name, loader):
         m=importlib.import_module(f'pages.{module_name}')
@@ -36,10 +91,8 @@ class MainWindow(QMainWindow):
         result = fn(); data = result.data if getattr(result,'success',False) else None
         profile = getattr(self.active_profile,'name','default')
         if data is not None:
-            self.cache.save(profile, self.system_id, key, data); self.audit.log('cache_save', profile=profile, system_id=self.system_id, summary=key)
-            return data
+            self.cache.save(profile, self.system_id, key, data); return data
         cached = self.cache.load(profile, self.system_id, key)
-        self.audit.log('cache_load', profile=profile, system_id=self.system_id, success=bool(cached), summary=key)
         return (cached or {}).get('data', [])
 
     def _build_pages(self):
@@ -60,8 +113,8 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self._resolve_page('audit_log_page',lambda:self.audit.read_entries()))
 
     def refresh_status(self):
-        mode='Mock Mode' if self.active_profile and self.active_profile.mock_mode else 'Production'
-        self.status.setText(f'Profile: {getattr(self.active_profile,"name","None")} | Active System: {self.system_id or "None"} | Mode: {mode} | Last Sync: {datetime.utcnow().isoformat()}Z')
+        badge='[Mock Mode]' if self.session.mock_mode else '[Authenticated]' if self.session.authenticated else '[Not Connected]'
+        self.status.setText(f'{badge} Profile: {getattr(self.active_profile,"name","None")} | Active System: {self.system_id or "None"} | Status: {self.session.auth_status} | Last Sync: {datetime.utcnow().isoformat()}Z')
 
 def run():
     app=QApplication([]); app.setStyleSheet(APP_STYLESHEET)

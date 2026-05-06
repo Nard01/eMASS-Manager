@@ -10,3 +10,5 @@ data/exports/
 *.p12
 *.pfx
 .env
+*.crt
+*.cer

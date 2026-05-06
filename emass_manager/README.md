@@ -1,41 +1,54 @@
-# eMASS Manager (Phase 2)
+# eMASS Manager
 
-Phase 2 introduces a **safe automation foundation** while keeping all real write actions disabled.
+## Startup Flow (Connect & Authenticate First)
+The app now starts on a dedicated **Connect & Authenticate** page instead of going directly to Dashboard.
+Main pages are locked until either:
+- a successful connection/authentication test, or
+- intentional **Mock Mode** entry.
 
-## Safety Model
-- Mock mode remains default.
-- Real eMASS POST/PUT/PATCH/DELETE actions are disabled until Phase 3.
-- Submit buttons for staged changes remain disabled in UI.
-- Future changes must be staged, reviewed, and validated first.
-
-## What's New in Phase 2
-- Shared reusable PyQt widgets for table UX consistency.
-- Local cache service under `data/cache/` by profile/system.
-- Staging engine with diff + validation + local persistence.
-- New **Staged Changes** page for review/export/clear operations.
-- Expanded audit logging with action metadata and failures.
-- Improved Excel exports with formatting and metadata headers.
-- Package readiness advisory summaries on reports.
-
-## Staged Changes
-Staged changes are local-only records that capture:
-- entity/action metadata
-- original vs proposed values
-- field-level diffs
-- validation messages/status
-
-No staged change is submitted to eMASS in Phase 2.
-
-## Cache Model
-Cache entries are JSON files in `data/cache/` grouped by profile and system. Sensitive secrets are not cached.
-
-## Audit Logs
-Audit records are written to `data/audit/audit.jsonl` and include timestamp, action, page/source, profile, system, entity identifiers, success/failure, summaries, and errors.
-
-## Phase 3 Preview
-Phase 3 will add controlled production write APIs with gated approvals and submission workflows.
-
-## Run
+Run with:
 ```bash
 python main.py
 ```
+
+## Authentication Modes
+1. **Mock Mode**
+   - Uses mock API responses.
+   - No URL, certificate, key, or API key required.
+   - Main app shows a visible Mock Mode badge.
+
+2. **PEM Certificate Files**
+   - Enter eMASS host URL and API key.
+   - Optional user UID header.
+   - Select client certificate (`.pem/.crt/.cer`) and private key (`.pem/.key`).
+   - Supports SSL verify toggle and optional CA bundle path.
+
+3. **Windows Certificate Store / CAC (Placeholder)**
+   - UI and abstraction layer are present.
+   - Returns a clear **Not implemented yet** style message currently.
+   - Future work: Windows CAPI/CNG + certificate store/smart card integration.
+
+## Security Cautions
+- API key and private key password are **required each session** by default.
+- Secrets are masked in UI.
+- Profiles store non-secret settings only.
+- No CAC PIN storage.
+- No private key/certificate secret logging.
+- Write APIs (POST/PUT/PATCH/DELETE) remain disabled.
+
+## Profile Storage
+Profiles persist non-secret values such as:
+- profile name
+- host URL
+- auth mode
+- user UID
+- cert/key paths
+- SSL verify and CA bundle
+- export directory
+- mock mode flag
+
+## Mock Mode Use
+- Use **Continue in Mock Mode** from the connect page to immediately unlock Dashboard and pages with mock data.
+
+## Future CAC Work
+Planned enhancements include secure Windows certificate store selection and smart card/CAC integration via supported OS APIs/libraries.
