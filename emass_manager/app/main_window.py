@@ -23,7 +23,7 @@ class MainWindow(QMainWindow):
         self.profiles=self.settings.load_profiles(); self.active_profile=self.profiles[0] if self.profiles else AuthProfile(name="Default Mock Profile")
         self.system_id='101'; self.session=SessionState(); self.client=EmassClientWrapper(self.active_profile)
         self.audit=AuditService(self.base/'data/audit'); self.cache=CacheService(self.base/'data/cache'); self.staging=StagingService(self.base/'data/staging/staged_changes.json'); self.readiness=ReadinessService(); self.auth=AuthService(self.audit)
-        self.audit.log('app_startup', profile=getattr(self.active_profile,'name','')); self.audit.log('connect_auth_page_opened', profile=getattr(self.active_profile,'name',''))
+        self.audit.log('app startup', profile=getattr(self.active_profile,'name','')); self.audit.log('connect/auth screen opened', profile=getattr(self.active_profile,'name',''))
 
         root=QWidget(); self.setCentralWidget(root); main=QVBoxLayout(root)
         self.status=QLabel(); main.addWidget(self.status)
@@ -48,11 +48,11 @@ class MainWindow(QMainWindow):
         page.status.setText("Status: Testing connection")
         mode = page.mode.currentText()
         p = self.active_profile
-        p.host_url = page.host.text().strip(); p.auth_mode = mode; p.user_uid = page.user_uid.text().strip(); p.client_cert_path = page.cert_path.text().strip(); p.private_key_path = page.key_path.text().strip(); p.ssl_verify = page.ssl_verify.isChecked(); p.ca_bundle_path = page.ca_bundle.text().strip(); p.mock_mode = page.mock_mode.isChecked() or mode == AuthMode.MOCK.value
-        outcome = self.auth.test_connection(p, page.api_key.text(), page.key_password.text())
+        p.host_url = page.host.text().strip(); p.auth_mode = mode; p.user_uid = page.user_uid.text().strip(); p.selected_certificate_thumbprint = page.cert_selector.currentData() or ""; p.ssl_verify = page.ssl_verify.isChecked(); p.mock_mode = page.mock_mode.isChecked() or mode == AuthMode.MOCK.value
+        outcome = self.auth.test_connection(p, page.api_key.text())
         page.status.setText(f"Status: {outcome.status} - {outcome.message}")
         if outcome.success:
-            self.session.mark_authenticated(p.name, p.mock_mode)
+            self.session.mark_authenticated(p.name, p.mock_mode, p.auth_mode, p.selected_certificate_thumbprint)
             self.audit.log("authenticated_session_started", profile=p.name, summary=outcome.status)
             self._set_auth_state(True)
         else:
@@ -60,7 +60,7 @@ class MainWindow(QMainWindow):
 
     def handle_continue_mock(self, page: ConnectAuthPage):
         self.active_profile.mock_mode = True; self.active_profile.auth_mode = AuthMode.MOCK.value
-        self.session.mark_authenticated(self.active_profile.name, True)
+        self.session.mark_authenticated(self.active_profile.name, True, AuthMode.MOCK.value, "")
         self.audit.log("mock_mode_entered", profile=self.active_profile.name)
         self.audit.log("authenticated_session_started", profile=self.active_profile.name, summary="Mock mode")
         page.status.setText("Status: Mock mode active")
@@ -114,7 +114,8 @@ class MainWindow(QMainWindow):
 
     def refresh_status(self):
         badge='[Mock Mode]' if self.session.mock_mode else '[Authenticated]' if self.session.authenticated else '[Not Connected]'
-        self.status.setText(f'{badge} Profile: {getattr(self.active_profile,"name","None")} | Active System: {self.system_id or "None"} | Status: {self.session.auth_status} | Last Sync: {datetime.utcnow().isoformat()}Z')
+        suffix = f' | Cert: ...{self.session.cert_thumbprint_suffix}' if self.session.cert_thumbprint_suffix else ''
+        self.status.setText(f'{badge} Profile: {getattr(self.active_profile,"name","None")} | Active System: {self.system_id or "None"} | Status: {self.session.auth_status} | Auth Mode: {self.session.auth_mode or "N/A"}{suffix} | Last Sync: {datetime.utcnow().isoformat()}Z')
 
 def run():
     app=QApplication([]); app.setStyleSheet(APP_STYLESHEET)

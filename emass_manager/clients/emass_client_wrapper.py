@@ -1,36 +1,31 @@
 from __future__ import annotations
 from datetime import datetime, timedelta
 from clients.api_result import ApiResult
+from clients.http_transport import MockTransport
+from clients.windows_cac_auth_provider import WindowsCacAuthProvider
+
 
 class EmassClientWrapper:
-    def __init__(self, profile, api_key: str = "", key_password: str = ""):
+    def __init__(self, profile, api_key: str = ""):
         self.profile = profile
         self._api_key = api_key
-        self._key_password = key_password
         self._auth_status = "Not connected"
 
-    def test_connection(self) -> ApiResult:
+    def _transport(self):
         if self.profile.mock_mode or self.profile.auth_mode == "Mock Mode":
+            return MockTransport()
+        return WindowsCacAuthProvider(self.profile.host_url, self._api_key, self.profile.user_uid, self.profile.selected_certificate_thumbprint)
+
+    def test_connection(self) -> ApiResult:
+        result = self._transport().test_connection()
+        self._auth_status = "Connected" if result.success else "Authentication failed"
+        if self.profile.mock_mode:
             self._auth_status = "Mock mode active"
-            return ApiResult(True, {"message": "Mock connection successful"}, status_code=200)
-        if self.profile.auth_mode == "Windows Certificate Store / CAC":
-            self._auth_status = "Authentication failed"
-            # TODO: integrate with Windows CAPI/CNG and certificate store/smart card APIs.
-            return ApiResult(False, error="Unsupported Windows CAC mode (Not implemented yet)", status_code=501)
-        self._auth_status = "Connected"
-        return ApiResult(True, {"message": "PEM mode validation stub succeeded"}, status_code=200)
+        return result
 
-    def register_certificate_placeholder(self):
-        return ApiResult(False, error="Not implemented yet", status_code=501)
-
-    def get_auth_status(self):
-        return self._auth_status
-
-    def is_mock_mode(self):
-        return bool(self.profile.mock_mode)
-
-    def is_authenticated(self):
-        return self._auth_status in {"Connected", "Mock mode active"}
+    def get_auth_status(self): return self._auth_status
+    def is_mock_mode(self): return bool(self.profile.mock_mode)
+    def is_authenticated(self): return self._auth_status in {"Connected", "Mock mode active"}
 
     def _require_system(self, system_id: str | None): return ApiResult(False, error="Missing system ID", status_code=400) if not system_id else None
     def _write_disabled(self): return ApiResult(False, error="Write operations are disabled until Phase 3.", status_code=403)
