@@ -4,7 +4,7 @@ from pathlib import Path
 from models.submission_result import SubmissionResult
 from models.submission_receipt import SubmissionReceipt
 
-ENABLE_REAL_SUBMISSIONS = os.getenv("EMASS_ENABLE_REAL_SUBMISSIONS", "false").lower() == "true"
+ENABLE_REAL_SUBMISSIONS = False
 
 class SubmissionService:
     def __init__(self, base_dir: Path, audit_service):
@@ -14,7 +14,7 @@ class SubmissionService:
 
     def submit_change(self, staged_change: dict, live_entity: dict, confirm: bool = False) -> SubmissionResult:
         if not ENABLE_REAL_SUBMISSIONS:
-            return SubmissionResult(False, "disabled", "Real eMASS submissions are disabled by configuration.")
+            self.audit.log("staged_submit_blocked", success=False, summary="Real submissions disabled"); return SubmissionResult(False, "disabled", "Real eMASS submissions are disabled by configuration.")
         if staged_change.get("status") not in {"validated", "ready"}:
             return SubmissionResult(False, "blocked", "Staged change must be validated/ready before submit.")
         if not confirm:

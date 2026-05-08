@@ -73,3 +73,20 @@ Audit excludes API keys, PINs, private key material, certificate bodies, and sen
 - Native certificate thumbprint selection is required; API key is sent as `api-key` header; `user-uid` is sent only when configured.
 - Writes remain disabled by default. Enable guarded framework only with `EMASS_ENABLE_REAL_SUBMISSIONS=true` in developer environment.
 - No CAC PIN storage/export; no private key export; no PEM-primary path.
+
+## Phase 3A (Read Integration Framework)
+
+- Real eMASS API read-integration structure is in place through services -> client wrapper -> transport layers.
+- Native Windows CAC/certificate-store design remains, but CAC verification against a real environment is deferred.
+- Mock Mode remains fully supported and is the safe default path.
+- Live mode is read-only; write submissions remain disabled (`ENABLE_REAL_SUBMISSIONS = False`).
+- Endpoint paths are centralized and may require adjustment per actual Navy/DoD eMASS API deployment/version.
+- Cache stores normalized data, raw payload snapshots, source metadata (`mock/live/cache`), profile, system ID, and last sync timestamp.
+- Audit logging captures refresh, endpoint success/failure, cache save/load, and blocked submit attempts while avoiding sensitive material.
+
+### Troubleshooting initial real connection attempts (later phase)
+
+1. Validate host URL format and environment reachability.
+2. Confirm API key provisioning.
+3. Confirm Windows certificate thumbprint selection from CurrentUser store.
+4. If transport reports "configured but not yet verified", continue in Mock Mode and complete CAC validation later.
