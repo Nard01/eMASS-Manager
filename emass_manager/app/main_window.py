@@ -2,7 +2,7 @@ from __future__ import annotations
 import importlib
 from pathlib import Path
 from datetime import datetime
-from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QListWidget, QLabel, QStackedWidget, QMessageBox
+from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QListWidget, QStackedWidget, QMessageBox, QSizePolicy
 from app.theme import APP_STYLESHEET
 from app.settings import AppSettings
 from app.session_state import SessionState
@@ -14,10 +14,11 @@ from services.audit_service import AuditService
 from services.cache_service import CacheService
 from services.staging_service import StagingService
 from services.readiness_service import ReadinessService
+from app.widgets.text_utils import ElidedLabel
 
 class MainWindow(QMainWindow):
     def __init__(self):
-        super().__init__(); self.setWindowTitle('eMASS Manager'); self.resize(1400,860)
+        super().__init__(); self.setWindowTitle('eMASS Manager'); self.resize(1360,850); self.setMinimumSize(1100,700)
         self.base=Path(__file__).resolve().parents[1]
         self.settings=AppSettings(self.base)
         self.profiles=self.settings.load_profiles(); self.active_profile=self.profiles[0] if self.profiles else AuthProfile(name="Default Mock Profile")
@@ -26,9 +27,9 @@ class MainWindow(QMainWindow):
         self.audit.log('app startup', profile=getattr(self.active_profile,'name','')); self.audit.log('connect/auth screen opened', profile=getattr(self.active_profile,'name',''))
 
         root=QWidget(); self.setCentralWidget(root); main=QVBoxLayout(root)
-        self.status=QLabel(); main.addWidget(self.status)
+        self.status=ElidedLabel(); self.status.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed); main.addWidget(self.status)
         content=QHBoxLayout(); main.addLayout(content)
-        self.nav=QListWidget(); self.nav.addItems(['Dashboard','Systems','Controls','POA&Ms','Artifacts','Hardware Baseline','Software Baseline','Test Results','Workflows','Staged Changes','Reports','Settings','Audit Log']); self.nav.setMaximumWidth(220); content.addWidget(self.nav)
+        self.nav=QListWidget(); self.nav.setMinimumWidth(180); self.nav.setMaximumWidth(240); self.nav.addItems(['Dashboard','Systems','Controls','POA&Ms','Artifacts','Hardware Baseline','Software Baseline','Test Results','Workflows','Staged Changes','Reports','Settings','Audit Log']); self.nav.setMaximumWidth(220); content.addWidget(self.nav)
         self.stack=QStackedWidget(); content.addWidget(self.stack)
         self.connect_page = ConnectAuthPage(self.profiles, self.handle_test_connection, self.handle_continue_mock, self.handle_save_profile, self.handle_delete_profile, self.handle_new_profile, lambda: self._nav_to_settings(), self.close)
         self.stack.addWidget(self.connect_page)
