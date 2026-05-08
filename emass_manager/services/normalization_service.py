@@ -1,23 +1,27 @@
 from __future__ import annotations
 
+
 def _pick(d: dict, *keys, default=None):
     for k in keys:
-        if k in d and d[k] not in (None, ""):
-            return d[k]
+        v = d.get(k)
+        if v not in (None, ""):
+            return v
     return default
+
 
 class NormalizationService:
     def normalize_list(self, rows, kind: str) -> list[dict]:
-        if not isinstance(rows, list):
-            rows = [rows] if rows else []
-        return [self.normalize_item(r or {}, kind) for r in rows if isinstance(r, dict)]
+        rows = rows if isinstance(rows, list) else ([] if rows is None else [rows])
+        return [self.normalize_item(r if isinstance(r, dict) else {"value": r}, kind) for r in rows]
 
     def normalize_item(self, row: dict, kind: str) -> dict:
-        out = {
+        base = {
             "id": _pick(row, "id", f"{kind}Id", "systemId", "poamId", "artifactId", "controlId", default="unknown"),
-            "title": _pick(row, "title", "name", "displayName", "acronym", default=kind.title()),
-            "status": _pick(row, "status", "implementationStatus", "complianceStatus", "result", default="Unknown"),
+            "title": _pick(row, "title", "name", "displayName", "workflow", "controlTitle", default="Untitled"),
+            "status": _pick(row, "status", "implementationStatus", "result", "complianceStatus", default="Unknown"),
             "raw": row,
         }
-        out.update({k: v for k, v in row.items() if k not in out})
-        return out
+        if kind == "controls":
+            base["acronym"] = _pick(row, "acronym", "controlAcronym", "control", "controlId", default="")
+            base["implementationStatus"] = _pick(row, "implementationStatus", "status", default="Unknown")
+        return {**row, **base}
